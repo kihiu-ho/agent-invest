@@ -1,6 +1,14 @@
 # AgentInvest: Financial Research AI System
 
-## 🏗️ System Architecture Overview
+## 📚 Comprehensive Documentation
+
+### Architecture & Implementation
+
+- [Tool Choosung Guide](./docs/compare-tool.md) - Comparison of key tools
+- [Data Flow Sequence Diagram](./docs/data-flow-sequence.md)
+- [Architecture Overview](./docs/architecture-overview.md)
+
+## 🏗️ System Overview
 
 AgentInvest is a comprehensive financial research platform built on **4 Architectural Pillars** that ensure resilient data ingestion, intelligent reasoning, fault tolerance, and continuous improvement. This document explains how our current implementation achieves each pillar through specific technologies and design patterns. Copilot with Claude Sonnet 4 is used for code generation.
 
@@ -456,12 +464,6 @@ sequenceDiagram
 ```
 
 
-
-## 📚 Comprehensive Documentation
-
-### Architecture & Implementation
-
-- [🛠️ Tool Choosung Guide](./docs/compare-tool.md) - Comparison of key tools
 
 
 ## 🚀 Quick Start

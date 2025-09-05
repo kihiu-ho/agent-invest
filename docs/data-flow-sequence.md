@@ -4,16 +4,16 @@ This document provides a detailed view of the complete request lifecycle in the 
 
 ## 📊 Complete Request Lifecycle
 
-The AgentInvest webapp processes financial analysis requests through a sophisticated 9-step workflow that optimizes performance through intelligent caching, 20-page PDF processing limits, and Weaviate vector database integration. The system demonstrates both fast path (cache hit) and full processing path (cache miss) scenarios with real-time performance monitoring.
+The AgentInvest webapp processes financial analysis requests through a sophisticated 9-step workflow that optimizes performance through intelligent caching and Weaviate vector database integration. The system demonstrates both fast path (cache hit) and full processing path (cache miss) scenarios with real-time performance monitoring.
 
 ### Key Performance Characteristics
 
 - **Cache Hit Response**: ~200ms for immediate report delivery
-- **Full Analysis**: ~5.5 minutes for comprehensive AI-powered analysis with 20-page PDF optimization
-- **PDF Processing**: 20 pages processed in ~88 seconds using LlamaMarkdownReader
-- **Vector Storage**: 42 document chunks with 100% success rate in Weaviate
+- **Full Analysis**: comprehensive AI-powered analysis
+- **PDF Processing**: LlamaMarkdownReader
+- **Vector Storage**: Weaviate
 - **Real-time Updates**: WebSocket-based progress notifications throughout processing
-- **Agent Reliability**: No model_info attribute errors with fixed AutoGen ExecutiveSummaryAgent
+- **Agent Reliability**: AutoGen ExecutiveSummaryAgent
 
 ## 🔄 Data Flow Sequence Diagram
 
@@ -33,8 +33,8 @@ sequenceDiagram
 
     Note over User, External: AgentInvest Webapp - Complete Report Generation Flow
 
-    User->>Frontend: 1. Request financial report for 0005.HK
-    Frontend->>Backend: 2. POST /api/reports {"ticker": "0005.HK"}
+    User->>Frontend: 1. Request financial report for XXXX.HK
+    Frontend->>Backend: 2. POST /api/reports {"ticker": "XXXX.HK"}
     Backend->>Cache: 3. Check for cached report
 
     alt Cache Hit (Fast Path)

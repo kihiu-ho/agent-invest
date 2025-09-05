@@ -1,0 +1,449 @@
+# Financial Analyzer - Comprehensive .gitignore
+# ================================================
+
+# Python
+# ------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+test-results/
+.testmondata
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+pdm.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.env.*
+!.env.example
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Financial Analyzer Project Specific
+# ===================================
+
+# Generated Reports and Output Files
+financial_analyzer/reports/output/
+reports/output/
+*.pdf
+*.html
+!**/templates/**/*.html
+!**/static/**/*.html
+!docs/**/*.html
+
+# Generated Charts and Images
+financial_analyzer/reports/charts/
+reports/charts/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp
+!**/static/**/*.png
+!**/static/**/*.jpg
+!**/static/**/*.jpeg
+!**/static/**/*.gif
+!**/static/**/*.svg
+!docs/**/*.png
+!docs/**/*.jpg
+
+# Log Files and Directories
+financial_analyzer/logs/
+logs/
+*.log
+*.log.*
+*.out
+error.log
+debug.log
+financial_analyzer.log
+
+# Data and Cache Files
+financial_analyzer/data/
+data/
+cache/
+temp/
+tmp/
+.cache/
+*.cache
+*.tmp
+*.temp
+
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+financial_analyzer*.db
+financial_analyzer_dev.db
+financial_analyzer_test.db
+
+# Environment and Configuration Files
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env.test
+financial_analyzer/config/local.yaml
+financial_analyzer/config/secrets.yaml
+config/local.yaml
+config/secrets.yaml
+
+# API Keys and Sensitive Data
+secrets/
+api_keys/
+credentials/
+*.key
+*.pem
+*.crt
+*.p12
+api_keys.txt
+credentials.json
+auth_config.json
+
+# Workflow and Session Files
+workflow_state_*.json
+session_*.json
+analysis_session_*.json
+orchestrator_state_*.json
+
+# Temporary Analysis Files
+analysis_*.json
+temp_analysis_*
+financial_data_*.json
+market_data_*.json
+
+# IDE and Editor Files
+# ====================
+
+# Visual Studio Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+
+# PyCharm / IntelliJ
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+Sessionx.vim
+.netrwhist
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Nano
+*.save
+
+# Operating System Files
+# ======================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Docker and Deployment
+# =====================
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+docker-compose.local.yml
+docker-compose.*.yml
+!docker-compose.yml
+.docker/
+Dockerfile.local
+
+# Kubernetes
+k8s/secrets/
+*.kubeconfig
+kustomization.yaml.bak
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.tfvars
+
+# Ansible
+*.retry
+
+# Vagrant
+.vagrant/
+
+# Monitoring and Metrics
+# ======================
+
+# Prometheus
+prometheus_data/
+alertmanager_data/
+
+# Grafana
+grafana_data/
+
+# Performance and Profiling
+*.prof
+*.pprof
+*.trace
+
+# Documentation Build Files
+# =========================
+
+# Sphinx
+docs/_build/
+docs/_static/
+docs/_templates/
+docs/build/
+
+# MkDocs
+site/
+mkdocs_build/
+
+# Jupyter Book
+_build/
+.jupyter_cache/
+
+# GitBook
+_book/
+
+# Miscellaneous
+# =============
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.rar
+*.7z
+
+# Node.js (if using for frontend tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Keep Important Template Files
+# =============================
+!.env.example
+!financial_analyzer/config/development.yaml
+!financial_analyzer/config/production.yaml
+!financial_analyzer/reports/templates/
+!financial_analyzer/reports/static/
+!financial_analyzer/examples/
+!tests/
+!docs/
+!README.md
+!LICENSE
+!requirements.txt
+!backend/requirements.txt
+!requirements-dev.txt
+!Dockerfile
+!docker-compose.yml
+!.github/
+*.md
+*.json
+*.txt
+*.jsonl
+!docs/*.md
+!README.md
+webapp/backend/reports/*

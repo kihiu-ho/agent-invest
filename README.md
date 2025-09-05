@@ -4,6 +4,11 @@
 
 AgentInvest is a comprehensive financial research platform built on **4 Architectural Pillars** that ensure resilient data ingestion, intelligent reasoning, fault tolerance, and continuous improvement. This document explains how our current implementation achieves each pillar through specific technologies and design patterns. Copilot with Claude Sonnet 4 is used for code generation.
 
+![Excutive Summary](docs/image/p1.png)
+
+![Recommendation](docs/image/p2.png)
+
+![Technical Analysis](docs/image/p3.png)
 ## Summary
 
 This section provides a comprehensive mapping of system architecture requirements to specific software libraries and frameworks, with explanatory context for each technology choice.
@@ -87,19 +92,7 @@ The LangSmith monitoring interface provides comprehensive observability for Agen
 - **Feedback Loop**: Integrates with the feedback analytics system to correlate user satisfaction with model performance
 - **Quality Assurance**: Tracks bull/bear analysis balance, citation accuracy, and content quality metrics
 
-**Technical Configuration:**
-- **Integration Point**: Connected to AutoGen agents and FastAPI backend
-- **Data Collection**: Automatic logging of all LLM interactions and agent communications
-- **Alerting**: Configurable alerts for performance degradation and error thresholds
-- **Compliance**: Audit trail capabilities for regulatory compliance and quality assurance
 
-### System Integration & Data Flow
-
-Both visualization systems integrate seamlessly with the AgentInvest architecture:
-
-1. **Feedback Dashboard** ↔ **Weaviate Vector Database**: Semantic analysis of feedback patterns for automated improvement recommendations
-2. **LangSmith Monitoring** ↔ **Multi-Agent System**: Real-time tracking of agent performance and coordination
-3. **Combined Analytics** ↔ **Data Flywheel**: Continuous improvement through integrated feedback and performance monitoring
 
 
 ## 🛠️ Technology Stack & Tool Choices

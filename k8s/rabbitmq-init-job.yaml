@@ -1,0 +1,147 @@
+---
+# RabbitMQ Initialization Job for AgentInvest Queues and Exchanges
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rabbitmq-init
+  namespace: agentinvest
+  labels:
+    app: rabbitmq-init
+    component: message-queue-setup
+spec:
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-init
+        component: message-queue-setup
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: rabbitmq-init
+        image: rabbitmq:3.12-management-alpine
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "🚀 Starting RabbitMQ initialization for AgentInvest..."
+          
+          # Wait for RabbitMQ to be ready
+          echo "⏳ Waiting for RabbitMQ to be ready..."
+          until rabbitmqctl -n rabbit@rabbitmq-0.rabbitmq-headless.agentinvest.svc.cluster.local status; do
+            echo "Waiting for RabbitMQ..."
+            sleep 5
+          done
+          
+          echo "✅ RabbitMQ is ready, setting up AgentInvest message infrastructure..."
+          
+          # Set RabbitMQ node name for management commands
+          export RABBITMQ_NODENAME=rabbit@rabbitmq-0.rabbitmq-headless.agentinvest.svc.cluster.local
+          
+          # Create AgentInvest virtual host
+          rabbitmqctl add_vhost agentinvest || echo "Virtual host already exists"
+          
+          # Create AgentInvest user with full permissions
+          rabbitmqctl add_user agentinvest agentinvest123 || echo "User already exists"
+          rabbitmqctl set_user_tags agentinvest administrator
+          rabbitmqctl set_permissions -p agentinvest agentinvest ".*" ".*" ".*"
+          
+          # Create exchanges for AgentInvest workflow
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare exchange name=agentinvest.reports type=topic durable=true
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare exchange name=agentinvest.agents type=direct durable=true
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare exchange name=agentinvest.notifications type=fanout durable=true
+          
+          # Create queues for different AgentInvest components
+          
+          # Report generation queues
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=report.requests durable=true arguments='{"x-message-ttl":3600000,"x-max-length":1000}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=report.processing durable=true arguments='{"x-message-ttl":3600000,"x-max-length":500}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=report.completed durable=true arguments='{"x-message-ttl":86400000,"x-max-length":2000}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=report.failed durable=true arguments='{"x-message-ttl":86400000,"x-max-length":500}'
+          
+          # AutoGen agent communication queues
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=agent.data_collector durable=true arguments='{"x-message-ttl":1800000,"x-max-length":200}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=agent.tipranks_analyst durable=true arguments='{"x-message-ttl":1800000,"x-max-length":200}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=agent.technical_analysis durable=true arguments='{"x-message-ttl":1800000,"x-max-length":200}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=agent.news_analysis durable=true arguments='{"x-message-ttl":1800000,"x-max-length":200}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=agent.investment_decision durable=true arguments='{"x-message-ttl":1800000,"x-max-length":200}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=agent.verification durable=true arguments='{"x-message-ttl":1800000,"x-max-length":200}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=agent.citation_tracking durable=true arguments='{"x-message-ttl":1800000,"x-max-length":200}'
+          
+          # Redis-RabbitMQ integration queues
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=redis.cache_updates durable=true arguments='{"x-message-ttl":300000,"x-max-length":1000}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=redis.cache_invalidation durable=true arguments='{"x-message-ttl":300000,"x-max-length":500}'
+          
+          # Notification queues
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=notifications.email durable=true arguments='{"x-message-ttl":86400000,"x-max-length":1000}'
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=notifications.webhook durable=true arguments='{"x-message-ttl":86400000,"x-max-length":1000}'
+          
+          # Dead letter queue for failed messages
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare queue name=dead_letter_queue durable=true
+          
+          # Bind queues to exchanges
+          
+          # Report workflow bindings
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.reports destination=report.requests routing_key=report.request
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.reports destination=report.processing routing_key=report.processing
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.reports destination=report.completed routing_key=report.completed
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.reports destination=report.failed routing_key=report.failed
+          
+          # Agent communication bindings
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.agents destination=agent.data_collector routing_key=data_collector
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.agents destination=agent.tipranks_analyst routing_key=tipranks_analyst
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.agents destination=agent.technical_analysis routing_key=technical_analysis
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.agents destination=agent.news_analysis routing_key=news_analysis
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.agents destination=agent.investment_decision routing_key=investment_decision
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.agents destination=agent.verification routing_key=verification
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.agents destination=agent.citation_tracking routing_key=citation_tracking
+          
+          # Redis integration bindings
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.reports destination=redis.cache_updates routing_key=cache.update
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.reports destination=redis.cache_invalidation routing_key=cache.invalidate
+          
+          # Notification bindings (fanout - all notifications go to all queues)
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.notifications destination=notifications.email
+          rabbitmqadmin -H rabbitmq-service -P 15672 -u agentinvest -p agentinvest123 -V agentinvest declare binding source=agentinvest.notifications destination=notifications.webhook
+          
+          echo "✅ AgentInvest RabbitMQ initialization completed successfully!"
+          echo "📊 Queue Summary:"
+          rabbitmqctl -n $RABBITMQ_NODENAME list_queues -p agentinvest name messages consumers
+          
+          echo "🔗 Exchange Summary:"
+          rabbitmqctl -n $RABBITMQ_NODENAME list_exchanges -p agentinvest name type
+          
+          echo "🎉 RabbitMQ is ready for AgentInvest message processing!"
+        env:
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: rabbitmq-username
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: rabbitmq-password
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      initContainers:
+      - name: wait-for-rabbitmq
+        image: busybox:1.35
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for RabbitMQ service to be ready..."
+          until nc -z rabbitmq-service 5672; do
+            echo "Waiting for RabbitMQ..."
+            sleep 2
+          done
+          echo "RabbitMQ is ready!"
+  backoffLimit: 3
+  activeDeadlineSeconds: 600

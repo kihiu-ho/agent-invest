@@ -1,0 +1,321 @@
+---
+# ServiceMonitor for Prometheus to scrape RabbitMQ metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rabbitmq-metrics
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: rabbitmq
+  endpoints:
+  - port: prometheus
+    interval: 30s
+    path: /metrics
+    scheme: http
+
+---
+# RabbitMQ Health Check Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-health
+  namespace: agentinvest
+  labels:
+    app: rabbitmq-health
+    component: message-queue-health
+spec:
+  type: ClusterIP
+  ports:
+  - name: health-check
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: rabbitmq-health
+
+---
+# RabbitMQ Health Check Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq-health
+  namespace: agentinvest
+  labels:
+    app: rabbitmq-health
+    component: message-queue-health
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq-health
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-health
+        component: message-queue-health
+    spec:
+      containers:
+      - name: health-checker
+        image: python:3.11-alpine
+        ports:
+        - containerPort: 8080
+        command:
+        - /bin/sh
+        - -c
+        - |
+          pip install pika flask requests
+          cat > /app/health_check.py << 'EOF'
+          import pika
+          import json
+          import time
+          import logging
+          from flask import Flask, jsonify
+          from datetime import datetime
+          import threading
+          import requests
+          
+          app = Flask(__name__)
+          logging.basicConfig(level=logging.INFO)
+          logger = logging.getLogger(__name__)
+          
+          # RabbitMQ connection parameters
+          RABBITMQ_HOST = 'rabbitmq-service'
+          RABBITMQ_PORT = 5672
+          RABBITMQ_USER = 'agentinvest'
+          RABBITMQ_PASS = 'agentinvest123'
+          RABBITMQ_VHOST = 'agentinvest'
+          MANAGEMENT_URL = 'http://rabbitmq-service:15672'
+          
+          health_status = {
+              'status': 'unknown',
+              'last_check': None,
+              'connection_status': 'unknown',
+              'queue_status': {},
+              'management_api_status': 'unknown'
+          }
+          
+          def check_rabbitmq_connection():
+              try:
+                  credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+                  parameters = pika.ConnectionParameters(
+                      host=RABBITMQ_HOST,
+                      port=RABBITMQ_PORT,
+                      virtual_host=RABBITMQ_VHOST,
+                      credentials=credentials,
+                      heartbeat=60,
+                      connection_attempts=3,
+                      retry_delay=2
+                  )
+                  connection = pika.BlockingConnection(parameters)
+                  channel = connection.channel()
+                  
+                  # Test basic operations
+                  channel.queue_declare(queue='health_check_test', durable=False, auto_delete=True)
+                  channel.basic_publish(exchange='', routing_key='health_check_test', body='health_check')
+                  
+                  connection.close()
+                  return True, "Connection successful"
+              except Exception as e:
+                  return False, str(e)
+          
+          def check_management_api():
+              try:
+                  response = requests.get(
+                      f"{MANAGEMENT_URL}/api/overview",
+                      auth=(RABBITMQ_USER, RABBITMQ_PASS),
+                      timeout=10
+                  )
+                  if response.status_code == 200:
+                      return True, response.json()
+                  else:
+                      return False, f"HTTP {response.status_code}"
+              except Exception as e:
+                  return False, str(e)
+          
+          def check_queue_health():
+              try:
+                  response = requests.get(
+                      f"{MANAGEMENT_URL}/api/queues/{RABBITMQ_VHOST}",
+                      auth=(RABBITMQ_USER, RABBITMQ_PASS),
+                      timeout=10
+                  )
+                  if response.status_code == 200:
+                      queues = response.json()
+                      queue_status = {}
+                      for queue in queues:
+                          queue_status[queue['name']] = {
+                              'messages': queue.get('messages', 0),
+                              'consumers': queue.get('consumers', 0),
+                              'state': queue.get('state', 'unknown')
+                          }
+                      return True, queue_status
+                  else:
+                      return False, f"HTTP {response.status_code}"
+              except Exception as e:
+                  return False, str(e)
+          
+          def health_check_worker():
+              while True:
+                  try:
+                      # Check RabbitMQ connection
+                      conn_ok, conn_msg = check_rabbitmq_connection()
+                      health_status['connection_status'] = 'healthy' if conn_ok else f'unhealthy: {conn_msg}'
+                      
+                      # Check management API
+                      mgmt_ok, mgmt_data = check_management_api()
+                      health_status['management_api_status'] = 'healthy' if mgmt_ok else f'unhealthy: {mgmt_data}'
+                      
+                      # Check queue health
+                      queue_ok, queue_data = check_queue_health()
+                      if queue_ok:
+                          health_status['queue_status'] = queue_data
+                      else:
+                          health_status['queue_status'] = {'error': queue_data}
+                      
+                      # Overall status
+                      if conn_ok and mgmt_ok and queue_ok:
+                          health_status['status'] = 'healthy'
+                      else:
+                          health_status['status'] = 'unhealthy'
+                      
+                      health_status['last_check'] = datetime.now().isoformat()
+                      
+                  except Exception as e:
+                      logger.error(f"Health check error: {e}")
+                      health_status['status'] = 'error'
+                      health_status['last_check'] = datetime.now().isoformat()
+                  
+                  time.sleep(30)  # Check every 30 seconds
+          
+          @app.route('/health')
+          def health():
+              return jsonify(health_status)
+          
+          @app.route('/ready')
+          def ready():
+              if health_status['status'] == 'healthy':
+                  return jsonify({'status': 'ready'}), 200
+              else:
+                  return jsonify({'status': 'not ready', 'details': health_status}), 503
+          
+          @app.route('/live')
+          def live():
+              return jsonify({'status': 'alive'}), 200
+          
+          if __name__ == '__main__':
+              # Start health check worker in background
+              health_thread = threading.Thread(target=health_check_worker, daemon=True)
+              health_thread.start()
+              
+              # Start Flask app
+              app.run(host='0.0.0.0', port=8080)
+          EOF
+          
+          cd /app && python health_check.py
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+# RabbitMQ Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-grafana-dashboard
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue-monitoring
+    grafana_dashboard: "1"
+data:
+  rabbitmq-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "AgentInvest RabbitMQ Dashboard",
+        "tags": ["rabbitmq", "agentinvest"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "RabbitMQ Overview",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rabbitmq_up",
+                "legendFormat": "RabbitMQ Status"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "green", "value": 1}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 2,
+            "title": "Queue Messages",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rabbitmq_queue_messages{vhost=\"agentinvest\"}",
+                "legendFormat": "{{queue}}"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Message Rates",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(rabbitmq_queue_messages_published_total{vhost=\"agentinvest\"}[5m])",
+                "legendFormat": "Published - {{queue}}"
+              },
+              {
+                "expr": "rate(rabbitmq_queue_messages_delivered_total{vhost=\"agentinvest\"}[5m])",
+                "legendFormat": "Delivered - {{queue}}"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }

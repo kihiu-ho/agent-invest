@@ -1,0 +1,264 @@
+---
+# RabbitMQ ConfigMap for AgentInvest Message Queue
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+data:
+  # RabbitMQ Configuration
+  rabbitmq.conf: |
+    # Clustering
+    cluster_formation.peer_discovery_backend = rabbit_peer_discovery_k8s
+    cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+    cluster_formation.k8s.address_type = hostname
+    cluster_formation.node_cleanup.interval = 30
+    cluster_formation.node_cleanup.only_log_warning = true
+    cluster_partition_handling = autoheal
+    
+    # Memory and disk thresholds
+    vm_memory_high_watermark.relative = 0.6
+    disk_free_limit.absolute = 2GB
+    
+    # Networking
+    listeners.tcp.default = 5672
+    management.tcp.port = 15672
+    
+    # Logging
+    log.console = true
+    log.console.level = info
+    
+    # Performance tuning for AgentInvest workload
+    channel_max = 2047
+    connection_backlog = 128
+    heartbeat = 60
+    frame_max = 131072
+    
+    # Queue settings optimized for AutoGen agent communication
+    default_vhost = /
+    default_user = agentinvest
+    default_pass = agentinvest123
+    
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_peer_discovery_k8s,rabbitmq_prometheus].
+
+---
+# RabbitMQ Secret for Authentication
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-secret
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+type: Opaque
+data:
+  # Base64 encoded credentials
+  # Username: agentinvest (YWdlbnRpbnZlc3Q=)
+  # Password: agentinvest123 (YWdlbnRpbnZlc3QxMjM=)
+  rabbitmq-username: YWdlbnRpbnZlc3Q=
+  rabbitmq-password: YWdlbnRpbnZlc3QxMjM=
+  rabbitmq-erlang-cookie: YWdlbnRpbnZlc3QtZXJsYW5nLWNvb2tpZS0yMDI1
+
+---
+# RabbitMQ StatefulSet for Message Queue
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+spec:
+  serviceName: rabbitmq-headless
+  replicas: 1  # Single instance for P2 system
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+        component: message-queue
+    spec:
+      serviceAccountName: rabbitmq
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:3.12-management-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: amqp
+          containerPort: 5672
+          protocol: TCP
+        - name: management
+          containerPort: 15672
+          protocol: TCP
+        - name: prometheus
+          containerPort: 15692
+          protocol: TCP
+        env:
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: rabbitmq-username
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: rabbitmq-password
+        - name: RABBITMQ_ERLANG_COOKIE
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: rabbitmq-erlang-cookie
+        - name: RABBITMQ_NODE_NAME
+          value: "rabbit@$(hostname).rabbitmq-headless.agentinvest.svc.cluster.local"
+        - name: RABBITMQ_USE_LONGNAME
+          value: "true"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: rabbitmq-config
+          mountPath: /etc/rabbitmq
+        - name: rabbitmq-data
+          mountPath: /var/lib/rabbitmq
+        livenessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - status
+          initialDelaySeconds: 60
+          periodSeconds: 60
+          timeoutSeconds: 15
+        readinessProbe:
+          exec:
+            command:
+            - rabbitmq-diagnostics
+            - ping
+          initialDelaySeconds: 20
+          periodSeconds: 60
+          timeoutSeconds: 10
+      volumes:
+      - name: rabbitmq-config
+        configMap:
+          name: rabbitmq-config
+  volumeClaimTemplates:
+  - metadata:
+      name: rabbitmq-data
+      labels:
+        app: rabbitmq
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi
+      storageClassName: standard
+
+---
+# RabbitMQ Headless Service for StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-headless
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+spec:
+  clusterIP: None
+  ports:
+  - name: amqp
+    port: 5672
+    targetPort: 5672
+  - name: management
+    port: 15672
+    targetPort: 15672
+  selector:
+    app: rabbitmq
+
+---
+# RabbitMQ Service for External Access
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-service
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+spec:
+  type: ClusterIP
+  ports:
+  - name: amqp
+    port: 5672
+    targetPort: 5672
+    protocol: TCP
+  - name: management
+    port: 15672
+    targetPort: 15672
+    protocol: TCP
+  - name: prometheus
+    port: 15692
+    targetPort: 15692
+    protocol: TCP
+  selector:
+    app: rabbitmq
+
+---
+# RabbitMQ ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rabbitmq
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+
+---
+# RabbitMQ Role for Kubernetes API Access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rabbitmq
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+rules:
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+
+---
+# RabbitMQ RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rabbitmq
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+subjects:
+- kind: ServiceAccount
+  name: rabbitmq
+  namespace: agentinvest
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rabbitmq

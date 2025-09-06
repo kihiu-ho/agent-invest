@@ -1,0 +1,185 @@
+---
+# RabbitMQ Management Service for External Access
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq-management
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue-management
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: management-ui
+    port: 15672
+    targetPort: 15672
+    protocol: TCP
+  - name: amqp-external
+    port: 5672
+    targetPort: 5672
+    protocol: TCP
+  selector:
+    app: rabbitmq
+  sessionAffinity: ClientIP
+
+---
+# RabbitMQ Ingress for Management UI (Alternative to LoadBalancer)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rabbitmq-management-ingress
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue-management
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - rabbitmq.agentinvest.com
+    secretName: rabbitmq-tls-secret
+  rules:
+  - host: rabbitmq.agentinvest.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: rabbitmq-service
+            port:
+              number: 15672
+
+---
+# NetworkPolicy for RabbitMQ Security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq-network-policy
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+spec:
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow connections from AgentInvest backend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: agentinvest-backend
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Allow connections from Redis for message routing
+  - from:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 5672
+  # Allow management UI access from specific sources
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 15672
+  # Allow Prometheus monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 15692
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow Kubernetes API access for clustering
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# PodDisruptionBudget for RabbitMQ High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq-pdb
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+
+---
+# HorizontalPodAutoscaler for RabbitMQ (Optional)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rabbitmq-hpa
+  namespace: agentinvest
+  labels:
+    app: rabbitmq
+    component: message-queue
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: StatefulSet
+    name: rabbitmq
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60

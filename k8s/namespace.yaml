@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: functorhk
+  labels:
+    app: agentinvest-webapp
+    environment: production
